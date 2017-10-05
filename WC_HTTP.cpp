@@ -7,13 +7,14 @@
 #include "WC_HTTP.h"
 #include "WC_EEPROM.h"
 #include "WC_NTP.h"
+#include "FS.h"
 
 ESP8266WebServer server(80);
 bool isAP = false;
 String authPass = "";
 
-String bootstrap ="#include \"data\bootstrap.min.css\"";
-
+String bootstrap = "/bootstrap.min.css";
+String fileData;
 
 /**
  * Старт WiFi
@@ -25,6 +26,7 @@ void WiFi_begin(void) {
     Serial.printf("Start AP %s\n", EC_Config.ESP_NAME);
     WiFi.mode(WIFI_STA);
     WiFi.softAP(EC_Config.ESP_NAME);
+    WiFi.hostname(EC_Config.ESP_NAME);
     isAP = true;
     Serial.printf("Open http://192.168.4.1 in your browser\n");
   }
@@ -41,6 +43,7 @@ void WiFi_begin(void) {
   MDNS.begin(EC_Config.ESP_NAME);
   Serial.printf("Or by name: http://%s.local\n", EC_Config.ESP_NAME);
 
+  SPIFFS.begin();
 
 
 }
@@ -98,6 +101,7 @@ void HTTP_begin(void) {
   server.begin();
   Serial.printf( "HTTP server started ...\n" );
 
+
 }
 
 /**
@@ -108,7 +112,15 @@ void HTTP_loop(void) {
 }
 
 void HTTP_handleBootstrap(void) {
-  server.send ( 200, "text/html", bootstrap );
+
+  if (SPIFFS.exists(bootstrap)){
+
+      File f = SPIFFS.open(bootstrap, "r");
+      if (f && f.size()) {
+          Serial.println("Dumping log file");
+          server.streamFile(f, "text/css");
+      }
+  }
 }
 
 /*
@@ -126,8 +138,10 @@ void HTTP_handleRoot(void) {
     <style>\
       body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; }\
     </style>\
+    <link rel=\"stylesheet\" href=\"/bootstrap.min.css\">\
   </head>\
   <body>\
+  <div class=\"container\">\
    <h1>WiFi Термостат</h1>\n";
   out += "<h2>";
   out += EC_Config.ESP_NAME;
@@ -157,7 +171,7 @@ void HTTP_handleRoot(void) {
   if ( EC_Config.TERMOSTAT_STATUS )out += "включений";
   else out += "виключений";
   out += "</h2>\n";
-  out += "<h1><a href='/termostat-on-off'>";
+  out += "<h1><a class=\"btn btn-success\" href='/termostat-on-off'>";
   if ( EC_Config.TERMOSTAT_STATUS )out += "виключити";
   else out += "включити";
   out += "</a></h1>\n Статус: ";
@@ -171,6 +185,7 @@ void HTTP_handleRoot(void) {
   out += "\
      <p><a href=\"/config\">Налаштування мережі</a>\
      <p><a href=\"/config2\">Налаштування Термостата</a>\
+     </div>\
   </body>\
 </html>";
   server.send ( 200, "text/html", out );
